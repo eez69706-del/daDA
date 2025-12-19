@@ -1,0 +1,18 @@
+[
+  {
+    "id": 1,
+    "name": "أحمد",
+    "phone": "0500000000",
+    "password": "123456",
+    "role": "employee",
+    "loggedIn": false
+  },
+  {
+    "id": 2,
+    "name": "المدير",
+    "phone": "0511111111",
+    "password": "admin123",
+    "role": "admin",
+    "loggedIn": false
+  }
+]

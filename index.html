@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام الحضور والانصراف الذكي</title>
+    
+    <!-- مكتبات CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- مكتبة Socket.IO للإشعارات الفورية -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    
+
+    <link rel="stylesheet" href="style.css">
+
+
+    <!-- أنماط مخصصة -->
+
+</head>
+<body>
+
+    <!-- حاوية الإشعارات -->
+    <div id="notificationsContainer" class="notifications-container"></div>
+
+    <!-- شاشة التحميل -->
+    <div id="loading" class="loading">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- الصفحة الرئيسية -->
+    <div id="mainPage" class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-md w-full card-hover">
+            <div class="text-center mb-10">
+                <div class="text-6xl mb-6 text-blue-600 dark:text-blue-400">
+                    <i class="fas fa-user-clock"></i>
+                </div>
+                <h1 class="text-3xl font-extrabold text-gray-800 dark:text-white mb-2">تسجيل الدخول</h1>
+                <p class="text-gray-600 dark:text-gray-300">سجل دخولك لبدء استخدام النظام</p>
+            </div>
+            
+            <!-- رسالة تنبيه -->
+            <div id="mainAlert" class="alert hidden"></div>
+            
+            <!-- نموذج تسجيل الدخول -->
+            <form id="loginForm">
+                <div class="input-group">
+                    <label for="loginPhone" class="flex items-center gap-2 text-gray-800 dark:text-white">
+                        <i class="fas fa-phone text-blue-600 dark:text-blue-400"></i>
+                        رقم الجوال
+                    </label>
+                    <input type="tel" id="loginPhone" placeholder="05xxxxxxxx" required 
+                           pattern="05[0-9]{8}" class="focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white">
+                </div>
+                
+                <div class="input-group">
+                    <label for="loginPassword" class="flex items-center gap-2 text-gray-800 dark:text-white">
+                        <i class="fas fa-lock text-blue-600 dark:text-blue-400"></i>
+                        كلمة المرور
+                    </label>
+                    <input type="password" id="loginPassword" placeholder="ادخل كلمة المرور" required
+                           minlength="6" class="focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white">
+                </div>
+                
+                <button type="submit" class="btn btn-primary w-full text-lg py-3 mb-4">
+                    <i class="fas fa-sign-in-alt"></i>
+                    تسجيل الدخول
+                </button>
+            </form>
+            
+            <div class="mt-4">
+                <button onclick="openModal('forgotModal')" class="btn btn-warning w-full py-3">
+                    <i class="fas fa-key"></i>
+                    نسيت كلمة المرور
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- لوحة المستخدم العادي -->
+    <div id="userPanel" class="min-h-screen hidden">
+        <!-- شريط التنقل -->
+        <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 shadow-lg">
+            <div class="container mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+                <div>
+                    <h1 class="text-xl font-bold">
+                        <i class="fas fa-user-clock ml-2"></i>
+                        نظام الحضور والانصراف الذكي
+                    </h1>
+                    <p class="text-sm opacity-90" id="userGreeting">مرحباً</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-4">
+                    <span id="currentTime" class="text-sm"></span>
+                    <span class="role-badge" id="userRoleBadge"></span>
+                    
+                    <!-- زر الإشعارات -->
+                    <div class="relative">
+                        <button id="notificationsBtn" class="notifications-btn" onclick="toggleNotificationsDropdown()">
+                            <i class="fas fa-bell"></i>
+                            <span id="notificationCount" class="notification-badge hidden">0</span>
+                        </button>
+                        <div id="notificationsDropdown" class="notifications-dropdown">
+                            <div class="p-4">
+                                <h3 class="font-bold mb-2 text-gray-800 dark:text-white">
+                                    <i class="fas fa-bell ml-2"></i>
+                                    الإشعارات
+                                </h3>
+                                <div id="notificationsDropdownList" class="notifications-list"></div>
+                                <button onclick="clearAllNotifications()" class="btn btn-secondary btn-sm w-full mt-2">
+                                    <i class="fas fa-trash ml-2"></i>
+                                    مسح جميع الإشعارات
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- زر الرجوع إلى القائمة -->
+                    <button onclick="showMainPage()" class="admin-home-btn">
+                        <i class="fas fa-home"></i>
+                        الرجوع إلى القائمة
+                    </button>
+                    
+                    <button onclick="logout()" class="btn btn-danger text-sm">
+                        <i class="fas fa-sign-out-alt"></i>
+                        خروج
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="container mx-auto p-4">
+            <!-- بطاقة معلومات المستخدم -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-6 card-hover">
+                <div class="flex flex-col md:flex-row justify-between items-center">
+                    <div class="mb-4 md:mb-0">
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white" id="userDisplayName"></h2>
+                        <div class="flex flex-wrap items-center gap-4 mt-2">
+                            <span class="text-gray-600 dark:text-gray-300" id="userDisplayDepartment"></span>
+                            <span class="text-gray-500 dark:text-gray-400" id="userDisplayPhone"></span>
+                            <span class="role-badge" id="userRoleDisplay"></span>
+                        </div>
+                        <div class="mt-3">
+                            <span class="text-gray-700 dark:text-gray-300" id="userCurrentRank">الرتبة الحالية: </span>
+                            <span class="text-blue-600 dark:text-blue-400 font-bold" id="userRankName"></span>
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-4xl mb-2" id="userStatusIcon">⭕</div>
+                        <span class="badge" id="userStatusText">غير مسجل</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- إحصائيات سريعة -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8" id="userStatsSection">
+                <div class="stat-card">
+                    <div class="stat-icon text-blue-500">
+                        <i class="fas fa-calendar-day"></i>
+                    </div>
+                    <div class="stat-number text-blue-600" id="userDays">0</div>
+                    <div class="stat-label">أيام الحضور</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon text-green-500">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="stat-number text-green-600" id="userHours">0</div>
+                    <div class="stat-label">إجمالي الساعات</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon text-purple-500">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="stat-number text-purple-600" id="userAvg">0</div>
+                    <div class="stat-label">متوسط يومي</div>
+                </div>
+            </div>
+            
+            <!-- أزرار التحكم -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8" id="attendanceSection">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 card-hover">
+                    <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">
+                        <i class="fas fa-sign-in-alt ml-2"></i>
+                        تسجيل الدخول
+                    </h3>
+                    <p class="text-gray-600 dark:text-gray-300 mb-4">سجل دخولك لبدء العمل</p>
+                    <button id="attendanceLoginBtn" onclick="attendanceLogin()" 
+                            class="btn btn-success w-full py-3">
+                        <i class="fas fa-door-open"></i>
+                        تسجيل دخول
+                    </button>
+                </div>
+                
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 card-hover">
+                    <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">
+                        <i class="fas fa-sign-out-alt ml-2"></i>
+                        تسجيل الخروج
+                    </h3>
+                    <p class="text-gray-600 dark:text-gray-300 mb-4">سجل خروجك بعد انتهاء العمل</p>
+                    <button id="attendanceLogoutBtn" onclick="openModal('logoutModal')" 
+                            class="btn btn-danger w-full py-3" disabled>
+                        <i class="fas fa-door-closed"></i>
+                        تسجيل خروج
+                    </button>
+                </div>
+            </div>
+            
+            <!-- خدمات إضافية -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8" id="requestsSection">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 card-hover" id="leaveRequestSection">
+                    <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">
+                        <i class="fas fa-umbrella-beach ml-2"></i>
+                        طلب إجازة
+                    </h3>
+                    <p class="text-gray-600 dark:text-gray-300 mb-4">تقديم طلب للحصول على إجازة</p>
+                    <button onclick="openModal('leaveModal')" class="btn btn-warning w-full py-3">
+                        <i class="fas fa-file-export"></i>
+                        تقديم طلب
+                    </button>
+                </div>
+                
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 card-hover" id="resignRequestSection">
+                    <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">
+                        <i class="fas fa-file-signature ml-2"></i>
+                        طلب استقالة
+                    </h3>
+                    <p class="text-gray-600 dark:text-gray-300 mb-4">تقديم طلب استقالة من العمل</p>
+                    <button onclick="openModal('resignModal')" class="btn btn-danger w-full py-3">
+                        <i class="fas fa-file-contract"></i>
+                        تقديم طلب
+                    </button>
+                </div>
+            </div>
+            
+            <!-- قسم سجلي -->
+            <div class="employee-section">
+                <div class="section-title">
+                    <i class="fas fa-history text-blue-600 dark:text-blue-400"></i>
+                    <span>سجلي وطلباتي</span>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 p-4 rounded-lg transition-colors" onclick="showMyRequests('الاجازات')">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-blue-100 dark:bg-blue-900 p-3 rounded-lg">
+                                <i class="fas fa-umbrella-beach text-blue-600 dark:text-blue-400 text-xl"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-gray-800 dark:text-white">طلبات الإجازة</h4>
+                                <p id="myLeaveCount" class="text-gray-500 dark:text-gray-400">0 طلب</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 p-4 rounded-lg transition-colors" onclick="showMyRequests('الاستقالات')">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-red-100 dark:bg-red-900 p-3 rounded-lg">
+                                <i class="fas fa-file-signature text-red-600 dark:text-red-400 text-xl"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-gray-800 dark:text-white">طلبات الاستقالة</h4>
+                                <p id="myResignCount" class="text-gray-500 dark:text-gray-400">0 طلب</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- محتوى الطلبات -->
+                <div id="myRequestsContent"></div>
+            </div>
+            
+            <!-- سجل الحضور الأخير -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 card-hover" id="attendanceHistorySection">
+                <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">
+                    <i class="fas fa-history ml-2"></i>
+                    سجل الحضور الأخير
+                </h3>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>التاريخ</th>
+                                <th>وقت الدخول</th>
+                                <th>وقت الخروج</th>
+                                <th>المدة</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userAttendanceTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- لوحة المدير -->
+    <div id="adminPanel" class="min-h-screen hidden">
+        <!-- شريط التنقل -->
+        <div class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-4 shadow-lg">
+            <div class="container mx-auto flex justify-between items-center">
+                <div>
+                    <h1 class="text-xl font-bold">
+                        <i class="fas fa-crown ml-2"></i>
+                        لوحة تحكم المدير
+                    </h1>
+                    <p class="text-sm opacity-90" id="adminGreeting">مرحباً</p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <span id="adminCurrentTime" class="text-sm"></span>
+                    
+                    <!-- زر الإشعارات للمدير -->
+                    <div class="relative">
+                        <button id="adminNotificationsBtn" class="notifications-btn" onclick="toggleAdminNotificationsDropdown()">
+                            <i class="fas fa-bell"></i>
+                            <span id="adminNotificationCount" class="notification-badge hidden">0</span>
+                        </button>
+                        <div id="adminNotificationsDropdown" class="notifications-dropdown">
+                            <div class="p-4">
+                                <h3 class="font-bold mb-2 text-gray-800 dark:text-white">
+                                    <i class="fas fa-bell ml-2"></i>
+                                    إشعارات المدير
+                                </h3>
+                                <div id="adminNotificationsDropdownList" class="notifications-list"></div>
+                                <button onclick="clearAllAdminNotifications()" class="btn btn-secondary btn-sm w-full mt-2">
+                                    <i class="fas fa-trash ml-2"></i>
+                                    مسح جميع الإشعارات
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+<button onclick="showPage('userPage')" class="btn bg-gray-800 text-white border border-gray-600 text-sm">
+    <i class="fas fa-user"></i>
+    لوحتي الشخصية
+</button>
+<button onclick="logout()" class="btn btn-danger text-sm">
+    <i class="fas fa-sign-out-alt"></i>
+    خروج
+</button>                </div>
+            </div>
+        </div>
+
+        <div class="container mx-auto p-4">
+            <!-- إحصائيات سريعة -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="stat-card">
+                    <div class="stat-icon text-blue-500">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="stat-number text-blue-600" id="adminTotalUsers">0</div>
+                    <div class="stat-label">إجمالي الموظفين</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon text-yellow-500">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="stat-number text-yellow-600" id="adminActiveUsers">0</div>
+                    <div class="stat-label">مسجلين الآن</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon text-green-500">
+                        <i class="fas fa-file-alt"></i>
+                    </div>
+                    <div class="stat-number text-green-600" id="adminPendingRequests">0</div>
+                    <div class="stat-label">طلبات معلقة</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon text-red-500">
+                        <i class="fas fa-user-tag"></i>
+                    </div>
+                    <div class="stat-number text-red-600" id="adminRankChanges">0</div>
+                    <div class="stat-label">طلبات ترقية</div>
+                </div>
+            </div>
+            
+            <!-- تبويبات التحكم -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg mb-6">
+                <div class="border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex overflow-x-auto">
+                        <button onclick="showAdminTab('users')" 
+                                class="tab-btn active px-6 py-3 whitespace-nowrap">
+                            <i class="fas fa-users ml-2"></i>
+                            الموظفين والصلاحيات
+                        </button>
+                        <button onclick="showAdminTab('roles')" 
+                                class="tab-btn px-6 py-3 whitespace-nowrap">
+                            <i class="fas fa-user-tag ml-2"></i>
+                            إدارة الرتب
+                        </button>
+                        <button onclick="showAdminTab('attendance')" 
+                                class="tab-btn px-6 py-3 whitespace-nowrap">
+                            <i class="fas fa-history ml-2"></i>
+                            سجلات الحضور
+                        </button>
+                        <button onclick="showAdminTab('requests')" 
+                                class="tab-btn px-6 py-3 whitespace-nowrap">
+                            <i class="fas fa-file-alt ml-2"></i>
+                            طلبات الموظفين
+                        </button>
+                        <button onclick="showAdminTab('reports')" 
+                                class="tab-btn px-6 py-3 whitespace-nowrap">
+                            <i class="fas fa-chart-pie ml-2"></i>
+                            تقارير الحضور
+                        </button>
+                        <button onclick="showAdminTab('notifications')" 
+                                class="tab-btn px-6 py-3 whitespace-nowrap">
+                            <i class="fas fa-bell ml-2"></i>
+                            سجل الإشعارات
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- محتوى التبويبات -->
+                <div class="p-6">
+                    <!-- تبويب الموظفين -->
+                    <div id="usersTab" class="tab-content active">
+                        <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                            <h2 class="text-xl font-bold text-gray-800 dark:text-white">إدارة الموظفين والصلاحيات</h2>
+                            <div class="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                                <input type="text" id="searchUsers" placeholder="🔍 ابحث عن موظف..." 
+                                       class="border rounded-lg p-2 flex-1 min-w-[200px] dark:bg-gray-700 dark:text-white dark:border-gray-600">
+                                <button onclick="openModal('registerModal')" class="btn btn-success">
+                                    <i class="fas fa-user-plus ml-2"></i>
+                                    إضافة موظف
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>الاسم</th>
+                                        <th>الدور</th>
+                                        <th>الرتبة</th>
+                                        <th>رقم الجوال</th>
+                                        <th>الحالة</th>
+                                        <th>الصلاحيات</th>
+                                        <th>الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminUsersTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- تبويب إدارة الرتب -->
+                    <div id="rolesTab" class="tab-content">
+                        <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                            <h2 class="text-xl font-bold text-gray-800 dark:text-white">إدارة الرتب والصلاحيات</h2>
+                            <div class="flex gap-2">
+                                <button onclick="openModal('addRoleModal')" class="btn btn-success">
+                                    <i class="fas fa-plus ml-2"></i>
+                                    إضافة رتبة جديدة
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 card-hover">
+                                <h3 class="text-lg font-bold mb-4 text-gray-800 dark:text-white">الرتب الحالية في النظام</h3>
+                                <div id="rolesList" class="space-y-3"></div>
+                            </div>
+
+                            <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 card-hover">
+                                <h3 class="text-lg font-bold mb-4 text-gray-800 dark:text-white" id="editingRoleTitle">تعديل صلاحيات الرتبة</h3>
+                                <div class="input-group">
+                                    <label class="text-gray-800 dark:text-white">اسم الرتبة:</label>
+                                    <input type="text" id="editRoleName" class="border rounded-lg p-2 dark:bg-gray-700 dark:text-white dark:border-gray-600" disabled>
+                                </div>
+                                
+                                <div class="permission-group mt-4">
+                                    <h4 class="font-bold mb-3 text-gray-800 dark:text-white">الصلاحيات المتاحة:</h4>
+                                    <div id="rolePermissionsList" class="space-y-2"></div>
+                                </div>
+                                
+                                <div class="flex gap-2 mt-4">
+                                    <button onclick="saveRolePermissions()" class="btn btn-primary flex-1" id="saveRoleBtn">
+                                        <i class="fas fa-save ml-2"></i>
+                                        حفظ التعديلات
+                                    </button>
+                                    <button onclick="deleteRole()" class="btn btn-danger" id="deleteRoleBtn" disabled>
+                                        <i class="fas fa-trash ml-2"></i>
+                                        حذف الرتبة
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- تبويب سجلات الحضور -->
+                    <div id="attendanceTab" class="tab-content">
+                        <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                            <h2 class="text-xl font-bold text-gray-800 dark:text-white">سجلات الحضور والانصراف</h2>
+                            <div class="flex gap-2 w-full md:w-auto">
+                                <input type="text" id="searchAttendance" placeholder="🔍 ابحث في السجلات..." 
+                                       class="border rounded-lg p-2 flex-1 min-w-[200px] dark:bg-gray-700 dark:text-white dark:border-gray-600">
+                            </div>
+                        </div>
+                        
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>الموظف</th>
+                                        <th>الرتبة</th>
+                                        <th>التاريخ</th>
+                                        <th>الدخول</th>
+                                        <th>الخروج</th>
+                                        <th>المدة</th>
+                                        <th>تقرير الخروج</th>
+                                        <th>الحالة</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminAttendanceTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- تبويب طلبات الموظفين -->
+                    <div id="requestsTab" class="tab-content">
+                        <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                            <h2 class="text-xl font-bold text-gray-800 dark:text-white">طلبات الموظفين</h2>
+                            <div class="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                                <select id="filterRequestType" class="border rounded-lg p-2 dark:bg-gray-700 dark:text-white dark:border-gray-600" onchange="filterRequests()">
+                                    <option value="">جميع الطلبات</option>
+                                    <option value="إجازة">طلبات الإجازة</option>
+                                    <option value="استقالة">طلبات الاستقالة</option>
+                                </select>
+                                <select id="filterRequestStatus" class="border rounded-lg p-2 dark:bg-gray-700 dark:text-white dark:border-gray-600" onchange="filterRequests()">
+                                    <option value="">جميع الحالات</option>
+                                    <option value="معلق">معلقة</option>
+                                    <option value="مقبول">مقبولة</option>
+                                    <option value="مرفوض">مرفوضة</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>الموظف</th>
+                                        <th>الرتبة</th>
+                                        <th>نوع الطلب</th>
+                                        <th>السبب / التفاصيل</th>
+                                        <th>التاريخ</th>
+                                        <th>الحالة</th>
+                                        <th>الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminRequestsTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- تبويب تقارير الحضور -->
+                    <div id="reportsTab" class="tab-content">
+                        <h2 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">تقارير وإحصائيات الحضور</h2>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 card-hover">
+                                <h3 class="text-lg font-bold mb-4 text-gray-800 dark:text-white">🏆 أفضل 5 موظفين</h3>
+                                <div id="topEmployeesList"></div>
+                            </div>
+                            
+                            <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 card-hover">
+                                <h3 class="text-lg font-bold mb-4 text-gray-800 dark:text-white">📊 إحصائيات الرتب</h3>
+                                <div id="rankStats"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 card-hover mb-6">
+                            <h3 class="text-lg font-bold mb-4 text-gray-800 dark:text-white">📅 تقرير الحضور اليومي</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                <div>
+                                    <label class="block mb-2 text-gray-800 dark:text-white">من تاريخ:</label>
+                                    <input type="date" id="reportFromDate" class="border rounded-lg p-2 w-full dark:bg-gray-700 dark:text-white dark:border-gray-600">
+                                </div>
+                                <div>
+                                    <label class="block mb-2 text-gray-800 dark:text-white">إلى تاريخ:</label>
+                                    <input type="date" id="reportToDate" class="border rounded-lg p-2 w-full dark:bg-gray-700 dark:text-white dark:border-gray-600">
+                                </div>
+                                <div class="flex items-end">
+                                    <button onclick="generateAttendanceReport()" class="btn btn-primary w-full">
+                                        <i class="fas fa-download ml-2"></i>
+                                        إنشاء التقرير
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="attendanceReportResult"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- تبويب سجل الإشعارات -->
+                    <div id="notificationsTab" class="tab-content">
+                        <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                            <h2 class="text-xl font-bold text-gray-800 dark:text-white">سجل الإشعارات والنشاطات</h2>
+                            <div class="flex gap-2">
+                                <button onclick="exportNotifications()" class="btn btn-success">
+                                    <i class="fas fa-download ml-2"></i>
+                                    تصدير السجل
+                                </button>
+                                <button onclick="clearAllNotificationsHistory()" class="btn btn-danger">
+                                    <i class="fas fa-trash ml-2"></i>
+                                    مسح السجل
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 card-hover">
+                            <div class="mb-4">
+                                <div class="flex gap-2">
+                                    <select id="filterNotificationType" class="border rounded-lg p-2 dark:bg-gray-700 dark:text-white dark:border-gray-600" onchange="filterNotifications()">
+                                        <option value="">جميع أنواع الإشعارات</option>
+                                        <option value="login">تسجيل دخول</option>
+                                        <option value="logout">تسجيل خروج</option>
+                                        <option value="request">طلبات</option>
+                                        <option value="user">إدارة المستخدمين</option>
+                                        <option value="admin">إشعارات المدير</option>
+                                    </select>
+                                    <input type="date" id="filterNotificationDate" class="border rounded-lg p-2 dark:bg-gray-700 dark:text-white dark:border-gray-600" onchange="filterNotifications()">
+                                </div>
+                            </div>
+                            
+                            <div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>التاريخ والوقت</th>
+                                            <th>نوع الإشعار</th>
+                                            <th>المستخدم</th>
+                                            <th>الرسالة</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="notificationsHistoryTable"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== النوافذ المنبثقة ===== -->
+    
+    <!-- نافذة إنشاء حساب جديد -->
+    <div id="registerModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('registerModal')">×</button>
+            <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">إنشاء حساب جديد</h3>
+            <form id="registerForm">
+                <div class="input-group">
+                    <label for="registerName" class="flex items-center gap-2 text-gray-800 dark:text-white">
+                        <i class="fas fa-user text-blue-600 dark:text-blue-400"></i>
+                        الاسم الكامل
+                    </label>
+                    <input type="text" id="registerName" placeholder="أدخل اسمك الكامل" required 
+                           class="dark:bg-gray-700 dark:text-white dark:border-gray-600">
+                </div>
+                
+                <div class="input-group">
+                    <label for="registerPhone" class="flex items-center gap-2 text-gray-800 dark:text-white">
+                        <i class="fas fa-phone text-blue-600 dark:text-blue-400"></i>
+                        رقم الجوال
+                    </label>
+                    <input type="tel" id="registerPhone" placeholder="05xxxxxxxx" required
+                           pattern="05[0-9]{8}" class="dark:bg-gray-700 dark:text-white dark:border-gray-600">
+                    <small class="text-gray-500 dark:text-gray-400 text-sm">يبدأ بـ 05 ويتكون من 10 أرقام</small>
+                </div>
+                
+                <div class="input-group">
+                    <label for="registerPassword" class="flex items-center gap-2 text-gray-800 dark:text-white">
+                        <i class="fas fa-lock text-blue-600 dark:text-blue-400"></i>
+                        كلمة المرور
+                    </label>
+                    <input type="password" id="registerPassword" placeholder="6 أحرف على الأقل" 
+                           minlength="6" required class="dark:bg-gray-700 dark:text-white dark:border-gray-600">
+                </div>
+                
+                <div class="input-group">
+                    <label for="registerConfirmPassword" class="flex items-center gap-2 text-gray-800 dark:text-white">
+                        <i class="fas fa-lock text-blue-600 dark:text-blue-400"></i>
+                        تأكيد كلمة المرور
+                    </label>
+                    <input type="password" id="registerConfirmPassword" placeholder="أعد إدخال كلمة المرور" 
+                           minlength="6" required class="dark:bg-gray-700 dark:text-white dark:border-gray-600">
+                </div>
+                
+                <div class="flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-success flex-1">إنشاء الحساب</button>
+                    <button type="button" onclick="closeModal('registerModal')" 
+                            class="btn btn-secondary">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- نافذة إضافة رتبة جديدة -->
+    <div id="addRoleModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('addRoleModal')">×</button>
+            <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">إضافة رتبة جديدة</h3>
+            <form id="addRoleForm">
+                <div class="input-group">
+                    <label for="newRoleName" class="flex items-center gap-2 text-gray-800 dark:text-white">
+                        <i class="fas fa-user-tag text-blue-600 dark:text-blue-400"></i>
+                        اسم الرتبة
+                    </label>
+                    <input type="text" id="newRoleName" placeholder="مثال: مشرف تقني" required 
+                           class="dark:bg-gray-700 dark:text-white dark:border-gray-600">
+                </div>
+                
+                <div class="input-group">
+                    <label for="newRoleKey" class="flex items-center gap-2 text-gray-800 dark:text-white">
+                        <i class="fas fa-key text-blue-600 dark:text-blue-400"></i>
+                        مفتاح الرتبة (بالإنجليزية)
+                    </label>
+                    <input type="text" id="newRoleKey" placeholder="مثال: tech_supervisor" required 
+                           class="dark:bg-gray-700 dark:text-white dark:border-gray-600">
+                    <small class="text-gray-500 dark:text-gray-400 text-sm">يجب أن يكون بالإنجليزية بدون مسافات</small>
+                </div>
+                
+                <div class="flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-success flex-1">إنشاء الرتبة</button>
+                    <button type="button" onclick="closeModal('addRoleModal')" 
+                            class="btn btn-secondary">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- نافذة تعديل الصلاحيات -->
+    <div id="editPermissionsModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('editPermissionsModal')">×</button>
+            <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">إدارة صلاحيات الموظف</h3>
+            <div class="mb-4">
+                <p class="text-gray-800 dark:text-white"><strong>الموظف:</strong> <span id="editUserName" class="font-bold"></span></p>
+                <p class="text-gray-800 dark:text-white"><strong>الدور الحالي:</strong> <span id="editUserRole" class="badge badge-info"></span></p>
+            </div>
+            
+            <div class="permission-group">
+                <h4 class="font-bold mb-3 text-gray-800 dark:text-white">الصلاحيات المتاحة:</h4>
+                <div id="permissionsList"></div>
+            </div>
+            
+            <div class="flex gap-2 mt-4">
+                <button onclick="savePermissions()" class="btn btn-primary flex-1">حفظ التعديلات</button>
+                <button onclick="closeModal('editPermissionsModal')" class="btn btn-secondary">إلغاء</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- نافذة نسيت كلمة المرور -->
+    <div id="forgotModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('forgotModal')">×</button>
+            <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">استعادة كلمة المرور</h3>
+            <form id="forgotForm">
+                <div class="input-group">
+                    <label for="forgotPhone" class="flex items-center gap-2 text-gray-800 dark:text-white">
+                        <i class="fas fa-phone text-blue-600 dark:text-blue-400"></i>
+                        رقم الجوال
+                    </label>
+                    <input type="tel" id="forgotPhone" placeholder="05xxxxxxxx" required 
+                           class="dark:bg-gray-700 dark:text-white dark:border-gray-600">
+                </div>
+                
+                <div class="flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-warning flex-1">إرسال كلمة المرور</button>
+                    <button type="button" onclick="closeModal('forgotModal')" 
+                            class="btn btn-secondary">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- نافذة تسجيل الخروج من الحضور -->
+    <div id="logoutModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('logoutModal')">×</button>
+            <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">تسجيل الخروج</h3>
+            <form id="logoutForm">
+                <div class="input-group">
+                    <label class="flex items-center gap-2 text-gray-800 dark:text-white">
+                        <i class="fas fa-file-alt text-blue-600 dark:text-blue-400"></i>
+                        تقرير العمل اليومي
+                    </label>
+                    <textarea id="logoutReport" rows="4" placeholder="ماذا أنجزت اليوم؟" required 
+                              class="dark:bg-gray-700 dark:text-white dark:border-gray-600"></textarea>
+                </div>
+                <div class="flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-danger flex-1">تأكيد الخروج</button>
+                    <button type="button" onclick="closeModal('logoutModal')" 
+                            class="btn btn-secondary">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- نافذة طلب إجازة -->
+    <div id="leaveModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('leaveModal')">×</button>
+            <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">طلب إجازة</h3>
+            <form id="leaveForm">
+                <div class="input-group">
+                    <label class="flex items-center gap-2 text-gray-800 dark:text-white">
+                        <i class="fas fa-sticky-note text-blue-600 dark:text-blue-400"></i>
+                        سبب الإجازة
+                    </label>
+                    <textarea id="leaveReason" rows="3" required 
+                              class="dark:bg-gray-700 dark:text-white dark:border-gray-600"></textarea>
+                </div>
+                <div class="input-group">
+                    <label class="flex items-center gap-2 text-gray-800 dark:text-white">
+                        <i class="fas fa-clock text-blue-600 dark:text-blue-400"></i>
+                        المدة
+                    </label>
+                    <input type="text" id="leaveDuration" placeholder="مثال: 3 أيام" required 
+                           class="dark:bg-gray-700 dark:text-white dark:border-gray-600">
+                </div>
+                <div class="input-group">
+                    <label class="flex items-center gap-2 text-gray-800 dark:text-white">
+                        <i class="fas fa-calendar text-blue-600 dark:text-blue-400"></i>
+                        تاريخ البدء
+                    </label>
+                    <input type="date" id="leaveStartDate" required 
+                           class="dark:bg-gray-700 dark:text-white dark:border-gray-600">
+                </div>
+                <div class="flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-warning flex-1">إرسال الطلب</button>
+                    <button type="button" onclick="closeModal('leaveModal')" 
+                            class="btn btn-secondary">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- نافذة طلب استقالة -->
+    <div id="resignModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('resignModal')">×</button>
+            <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">طلب استقالة</h3>
+            <form id="resignForm">
+                <div class="input-group">
+                    <label class="flex items-center gap-2 text-gray-800 dark:text-white">
+                        <i class="fas fa-sticky-note text-blue-600 dark:text-blue-400"></i>
+                        سبب الاستقالة
+                    </label>
+                    <textarea id="resignReason" rows="4" required 
+                              class="dark:bg-gray-700 dark:text-white dark:border-gray-600"></textarea>
+                </div>
+                <div class="input-group">
+                    <label class="flex items-center gap-2 text-gray-800 dark:text-white">
+                        <i class="fas fa-calendar text-blue-600 dark:text-blue-400"></i>
+                        تاريخ إنهاء العمل
+                    </label>
+                    <input type="date" id="resignEndDate" required 
+                           class="dark:bg-gray-700 dark:text-white dark:border-gray-600">
+                </div>
+                <div class="flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-danger flex-1">إرسال الطلب</button>
+                    <button type="button" onclick="closeModal('resignModal')" 
+                            class="btn btn-secondary">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- نافذة تأكيد تسجيل الدخول -->
+    <div id="confirmLoginModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('confirmLoginModal')">×</button>
+            <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">تأكيد تسجيل الدخول</h3>
+            <p class="mb-6 text-gray-800 dark:text-white">هل أنت متأكد من تسجيل الدخول الآن؟</p>
+            <div class="flex gap-2">
+                <button onclick="confirmAttendanceLogin()" class="btn btn-success flex-1">
+                    نعم، سجل دخول
+                </button>
+                <button onclick="closeModal('confirmLoginModal')" class="btn btn-secondary flex-1">
+                    إلغاء
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- نافذة معالجة الطلب -->
+    <div id="processModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('processModal')">×</button>
+            <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">معالجة الطلب</h3>
+            <p class="mb-4 text-gray-800 dark:text-white" id="processMessage"></p>
+            <div class="input-group" id="processReasonField" style="display: none;">
+                <label class="text-gray-800 dark:text-white">سبب الرفض (اختياري):</label>
+                <textarea id="rejectReason" rows="3" placeholder="اذكر سبب الرفض..." 
+                          class="dark:bg-gray-700 dark:text-white dark:border-gray-600"></textarea>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="processRequest('مقبول')" class="btn btn-success flex-1">✅ قبول</button>
+                <button onclick="showRejectReason()" class="btn btn-danger flex-1">❌ رفض</button>
+                <button onclick="closeModal('processModal')" class="btn btn-secondary flex-1">إلغاء</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- نافذة تفاصيل الطلب -->
+    <div id="requestDetailsModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('requestDetailsModal')">×</button>
+            <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white" id="requestDetailsTitle">تفاصيل الطلب</h3>
+            <div id="requestDetailsContent" class="text-gray-800 dark:text-white"></div>
+            <div class="flex gap-2 mt-4">
+                <button onclick="closeModal('requestDetailsModal')" class="btn btn-secondary flex-1">إغلاق</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- نافذة تفاصيل تقرير الخروج -->
+    <div id="reportDetailsModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('reportDetailsModal')">×</button>
+            <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">تقرير العمل اليومي</h3>
+            <div class="report-box mb-4" id="reportDetailsContent"></div>
+            <div class="flex gap-2">
+                <button onclick="closeModal('reportDetailsModal')" class="btn btn-secondary flex-1">إغلاق</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- نافذة تأكيد الحذف -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('deleteModal')">×</button>
+            <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">تأكيد الحذف</h3>
+            <p class="mb-6 text-gray-800 dark:text-white" id="deleteMessage"></p>
+            <div class="flex gap-2">
+                <button onclick="confirmDelete()" class="btn btn-danger flex-1">نعم، احذف</button>
+                <button onclick="closeModal('deleteModal')" class="btn btn-secondary flex-1">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
+
+
+
+
+</body>
+</html>
